@@ -20,7 +20,7 @@ import scipy.linalg as la
 
 __all__ = ['tduhf_eigen']
 
-def tduhf_eigen(occ, eps, v_eri, nov):
+def tduhf_eigen(occ, eps, v_eri, nov, coupled='True'):
     '''
     Implements generalized eigenvalue problem for TDUHF
     (A+B)(A-B)Z = w^{2}Z

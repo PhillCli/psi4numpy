@@ -28,27 +28,44 @@ psi4.core.set_output_file('output.dat', False)
 psi4.core.set_num_threads(2)
 
 # Set molecule to dimer (xyz coordinates, default angstroms)
-dimer = psi4.geometry("""
+molecule = "LiH"
+
+basis = "3-21G"
+#basis = "6-31G"
+#basis = "aug-cc-pvqz"
+
+geometries = {
+# closed shell
+              "ArHF" : """
 Ar 0.000 0.000 -3.470
 --
 H  0.000 0.000  0.000
 F  0.000 0.000  0.920
-""")
+""",
+              "He2" : """
+He  0.000 0.000 -1.48169297
+--
+He  0.000 0.000  1.48169297
+""",
+# open shell
+              "N2" : """
+0 4
+N  0.000 0.000  0.550
+--
+0 4
+N  0.000 0.000 -0.550
+""",
+              "LiH" : """
+0 2
+Li 0.000 0.000  0.3982
+--
+0 2
+H  0.000 0.000 -1.1945
+"""}
 
-#dimer = psi4.geometry("""
-##0 2
-##Li  0.000 0.000 -1.48169297
-#He  0.000 0.000 -1.48169297
-#--
-##0 2
-##Li  0.000 0.000  1.48169297
-#He  0.000 0.000  1.48169297
-#""")
+geo_str = geometries.get(molecule)
+dimer = psi4.geometry(geo_str)
 
-#basis = "sto-3g"
-#basis = "3-21G"
-#basis = "6-31G"
-basis = "aug-cc-pvtz"
 
 psi4.set_options({"basis" : basis,
                   "scf_type": "df",
@@ -59,7 +76,6 @@ psi4.set_options({"basis" : basis,
                   "e_convergence": 1e-13,
                   "d_convergence": 1e-13})
 
-# 'stolen' from helper_SAPT.py (Psi4NumPy)
 dimer.reset_point_group('c1')
 dimer.fix_orientation(True)
 dimer.fix_com(True)
@@ -80,18 +96,21 @@ monomerB.set_name("MonomerB")
 
 # FIXME: Add handling if nocc for UHF is zero, e.g. H
 t = time.time()
-# monomerA wfn optimization
+
 scf_e_A, wfnA = psi4.energy('SCF', return_wfn=True, molecule=monomerA)
 
-# monomerB wfn optimization
 scf_e_B, wfnB = psi4.energy('SCF', return_wfn=True, molecule=monomerB)
 
 print('SCF took                %5.3f seconds' % ( time.time() - t))
 
 print("")
-print("[DEBUG]: E_A: {} E_B: {}".format(scf_e_A, scf_e_B)) # agrees with reference implementation
+print("[DEBUG]: E_A: {} E_B: {}".format(scf_e_A, scf_e_B))
 
-# AO-MO coeffs in DCSB
+# AO-MO coeffs in DCBS
+# Cx_Y_z := x - occupied or virtual
+#           Y - monomere A or B
+#           z - a(b) for electron alpha(beta)
+
 # monA
 Co_A_a = wfnA.Ca_subset("AO", "OCC")
 Cv_A_a = wfnA.Ca_subset("AO", "VIR")
@@ -114,14 +133,14 @@ eps_B_b = np.asarray(wfnB.epsilon_b())
 assert(wfnA.nmo() == wfnB.nmo())
 nbf = wfnA.nmo()
 
-# occupied orbitals
+# no occupied orbitals
 nocc_A_a = wfnA.nalpha()
 nocc_A_b = wfnA.nbeta()
 
 nocc_B_a = wfnB.nalpha()
 nocc_B_b = wfnB.nbeta()
 
-# virtual orbitals
+# no virtual orbitals
 nvir_A_a = nbf - nocc_A_a
 nvir_A_b = nbf - nocc_A_b
 
@@ -129,8 +148,9 @@ nvir_B_a = nbf - nocc_B_a
 nvir_B_b = nbf - nocc_B_b
 
 # occ*virt block sizes
-nov_A_a = nocc_A_a * nvir_A_a # number of excitations (occ -> virt). Size of (ar) block
-nov_A_b = nocc_A_b * nvir_A_b # number of excitations (occ -> virt). Size of (ar) block
+# no alpha->beta excitations
+nov_A_a = nocc_A_a * nvir_A_a
+nov_A_b = nocc_A_b * nvir_A_b
 
 nov_B_a = nocc_B_a * nvir_B_a
 nov_B_b = nocc_B_b * nvir_B_b
@@ -184,19 +204,18 @@ I = mints.ao_eri()
 v_ijab_A_aa = np.asarray(mints.mo_transform(I, Co_A_a, Co_A_a, Cv_A_a, Cv_A_a))
 # (i, a): beta; (j, b): beta
 v_ijab_A_bb = np.asarray(mints.mo_transform(I, Co_A_b, Co_A_b, Cv_A_b, Cv_A_b))
-# (i, a): alpha; (j, b): beta
-#v_ijab_A_ab = np.asarray(mints.mo_transform(I, Co_A_a, Co_A_a, Cv_A_b, Cv_A_b))
-# (i, a): beta; (j, b): alpha
-#v_ijab_A_ba = np.asarray(mints.mo_transform(I, Co_A_b, Co_A_b, Cv_A_b, Cv_A_b))
+
 print("[DEBUG] monA: ERI(ijab) (alpha, alpha) shape: {}".format(v_ijab_A_aa.shape))
 print("[DEBUG] monA: ERI(ijab) (beta,  beta)  shape: {}".format(v_ijab_A_bb.shape))
-#print("[DEBUG] monA: ERI(ijab) (alpha, beta)  shape: {}".format(v_ijab_A_ab.shape))
-#print("[DEBUG] monA: ERI(ijab) (beta,  alpha) shape: {}".format(v_ijab_A_ba.shape))
+
 # v_ovov
 # (i, a): alpha; (j, b): alpha
 v_iajb_A_aa = np.asarray(mints.mo_transform(I, Co_A_a, Cv_A_a, Co_A_a, Cv_A_a))
+# (i, a): beta; (j, b): beta
 v_iajb_A_bb = np.asarray(mints.mo_transform(I, Co_A_b, Cv_A_b, Co_A_b, Cv_A_b))
+# (i, a): alpha; (j, b): beta
 v_iajb_A_ab = np.asarray(mints.mo_transform(I, Co_A_a, Cv_A_a, Co_A_b, Cv_A_b))
+# (i, a): beta; (j, b): alpha
 v_iajb_A_ba = np.asarray(mints.mo_transform(I, Co_A_b, Cv_A_b, Co_A_a, Cv_A_a))
 print("[DEBUG] monA: ERI(iajb) (alpha, alpha) shape: {}".format(v_iajb_A_aa.shape))
 print("[DEBUG] monA: ERI(iajb) (beta,  beta)  shape: {}".format(v_iajb_A_bb.shape))
@@ -206,26 +225,16 @@ print("[DEBUG] monA: ERI(iajb) (beta,  alpha) shape: {}".format(v_iajb_A_ba.shap
 ########
 # monB #
 ########
-#
 # v_oovv
-#
 # (i, a): alpha; (j, b): alpha
 v_ijab_B_aa = np.asarray(mints.mo_transform(I, Co_B_a, Co_B_a, Cv_B_a, Cv_B_a))
 # (i, a): beta; (j, b): beta
 v_ijab_B_bb = np.asarray(mints.mo_transform(I, Co_B_b, Co_B_b, Cv_B_b, Cv_B_b))
-# (i, a): alpha; (j, b): beta
-#v_ijab_B_ab = np.asarray(mints.mo_transform(I, Co_B_a, Co_B_a, Cv_B_b, Cv_B_b))
-# (i, a): beta; (j, b): alpha
-#v_ijab_B_ba = np.asarray(mints.mo_transform(I, Co_B_b, Co_B_b, Cv_B_b, Cv_B_b))
 
-# debug
 print("[DEBUG] monB: ERI(ijab) (alpha, alpha) shape: {}".format(v_ijab_B_aa.shape))
 print("[DEBUG] monB: ERI(ijab) (beta,  beta)  shape: {}".format(v_ijab_B_bb.shape))
-#print("[DEBUG] monB: ERI(ijab) (alpha, beta)  shape: {}".format(v_ijab_B_ab.shape))
-#print("[DEBUG] monB: ERI(ijab) (beta,  alpha) shape: {}".format(v_ijab_B_ba.shape)
-#
+
 # v_ovov
-#
 # (i, a): alpha; (j, b): alpha
 v_iajb_B_aa = np.asarray(mints.mo_transform(I, Co_B_a, Cv_B_a, Co_B_a, Cv_B_a))
 # (i, a): beta; (j, b): beta
@@ -235,7 +244,6 @@ v_iajb_B_ab = np.asarray(mints.mo_transform(I, Co_B_a, Cv_B_a, Co_B_b, Cv_B_b))
 # (i, a): beta; (j, b): alpha
 v_iajb_B_ba = np.asarray(mints.mo_transform(I, Co_B_b, Cv_B_b, Co_B_a, Cv_B_a))
 
-# debug
 print("[DEBUG] monB: ERI(iajb) (alpha, alpha) shape: {}".format(v_iajb_B_aa.shape))
 print("[DEBUG] monB: ERI(iajb) (beta,  beta)  shape: {}".format(v_iajb_B_bb.shape))
 print("[DEBUG] monB: ERI(iajb) (alpha, beta)  shape: {}".format(v_iajb_B_ab.shape))
@@ -319,21 +327,25 @@ E_2disp = -1*np.einsum('pq,pq', D, t_pq)
 
 print('TDUHF DISP TOOK: %5.3f seconds\n' % ( time.time() - t))
 # from Hapka&Zuchowski molpro code
-# ArHF
-ref = {
-        'sto-3g': -0.00073146046940817,
-        '3-21G' : -0.02331354,
-        '6-31G' : -0.02793545,
-        'aug-cc-pvdz' : -0.18362697
+# closed shell molecules
+ref = { 'ArHF': {
+            '3-21G' : -0.02331354,
+            '6-31G' : -0.02793545,
+            'aug-cc-pvdz' : -0.18362697
+        },
+        'He2': {
+            '3-21G' : -0.721440102e-4,
+            '6-31G' : -0.12789154e-3,
+            'aug-cc-pvdz' : -0.04751493
+        },
+        'N2': {
+            '3-21G' : -0.721440102e-4,
+            '6-31G' : -0.12789154e-3,
+            'aug-cc-pvdz' : -0.04751493
+        }
       }
-# He2
-#ref = {
-#        'sto-3g': -0.42271566e-8,
-#        '6-31G' : -0.12789154e-3,
-#        'aug-cc-pvdz' : -0.04751493
-#      }
 
-e_ref = ref.get(basis)
+e_ref = ref.get(molecule, {}).get(basis, 1)
 
 print("E^2_disp: {0} should be {1}".format(E_2disp*1000, e_ref))
 print("{}".format(E_2disp*1000/e_ref))
