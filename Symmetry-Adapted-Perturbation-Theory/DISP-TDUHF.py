@@ -28,11 +28,11 @@ psi4.core.set_output_file('output.dat', False)
 psi4.core.set_num_threads(2)
 
 # Set molecule to dimer (xyz coordinates, default angstroms)
-molecule = "LiH"
+molecule = "N2"
 
-basis = "3-21G"
+#basis = "3-21G"
 #basis = "6-31G"
-#basis = "aug-cc-pvqz"
+basis = "aug-cc-pvqz"
 
 geometries = {
 # closed shell
@@ -286,7 +286,8 @@ eig_A, Z_A = tduhf_eigen(
     ((eps_o_A_a, eps_o_A_b), (eps_v_A_a, eps_v_A_b)),
     ((v_ijab_A_aa, v_ijab_A_bb),
      (v_iajb_A_aa, v_iajb_A_bb, v_iajb_A_ab, v_iajb_A_ba)),
-     (nov_A_a, nov_A_b))
+     (nov_A_a, nov_A_b),
+    coupled=False)
 
 print("MonB: ")
 eig_B, Z_B = tduhf_eigen(
@@ -294,7 +295,8 @@ eig_B, Z_B = tduhf_eigen(
     ((eps_o_B_a, eps_o_B_b), (eps_v_B_a, eps_v_B_b)),
     ((v_ijab_B_aa, v_ijab_B_bb),
      (v_iajb_B_aa, v_iajb_B_bb, v_iajb_B_ab, v_iajb_B_ba)),
-     (nov_B_a, nov_B_b))
+     (nov_B_a, nov_B_b),
+    coupled=False)
 
 print("Calculating dispersion energy ...")
 # UHF version same as eq. 37-39 (only a->r, b->s excitations)
@@ -326,26 +328,45 @@ t_pq = np.einsum('pq,pq->pq', D, omegas_pq)
 E_2disp = -1*np.einsum('pq,pq', D, t_pq)
 
 print('TDUHF DISP TOOK: %5.3f seconds\n' % ( time.time() - t))
-# from Hapka&Zuchowski molpro code
-# closed shell molecules
-ref = { 'ArHF': {
+
+# ref values taken from Hapka&Zuchowski molpro code
+disp_ref = {
+    'ArHF': {
+            '3-21G' : -0.02331354,
+            '6-31G' : -0.02793545,
+            'aug-cc-pvdz' : -0.18362697,
+    },
+    'He2': {
+            '3-21G' : -0.721440102e-4,
+            '6-31G' : -0.12789154e-3,
+            'aug-cc-pvdz' : -0.04751493,
+    },
+    'N2': {
+            '3-21G' : -0.48765701e2,
+            '6-31G' : -0.49075900e2,
+            'aug-cc-pvdz' : -0.82041735e2,
+    }
+}
+
+ind_ref = {
+    'ArHF': {
             '3-21G' : -0.02331354,
             '6-31G' : -0.02793545,
             'aug-cc-pvdz' : -0.18362697
-        },
-        'He2': {
+    },
+    'He2': {
             '3-21G' : -0.721440102e-4,
             '6-31G' : -0.12789154e-3,
             'aug-cc-pvdz' : -0.04751493
-        },
-        'N2': {
-            '3-21G' : -0.721440102e-4,
-            '6-31G' : -0.12789154e-3,
-            'aug-cc-pvdz' : -0.04751493
-        }
-      }
+    },
+    'N2': {
+            '3-21G' : -0.12918873e4,
+            '6-31G' : -0.12607705e4,
+            'aug-cc-pvdz' : -0.13127782e4,
+    }
+}
 
-e_ref = ref.get(molecule, {}).get(basis, 1)
+e_disp_ref = disp_ref.get(molecule, {}).get(basis, 1)
 
-print("E^2_disp: {0} should be {1}".format(E_2disp*1000, e_ref))
-print("{}".format(E_2disp*1000/e_ref))
+print("E^2_disp: {0} should be {1}".format(E_2disp*1000, e_disp_ref))
+print("{}".format(E_2disp*1000/e_disp_ref))

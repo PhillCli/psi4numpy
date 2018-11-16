@@ -57,13 +57,18 @@ def tduhf_eigen(occ, eps, v_eri, nov, coupled='True'):
     #################
     A_aa  = np.einsum('ab,ij->iajb', np.diag(eps_v_a), np.diag(np.ones(nocc_a)))
     A_aa -= np.einsum('ij,ab->iajb', np.diag(eps_o_a), np.diag(np.ones(nvir_a)))
-    A_aa += v_iajb_aa
-    A_aa -= v_ijab_aa.swapaxes(1, 2)
+
+    if coupled:
+        A_aa += v_iajb_aa
+        A_aa -= v_ijab_aa.swapaxes(1, 2)
+
+        B_aa  = v_iajb_aa.copy()
+        B_aa -= v_iajb_aa.swapaxes(1, 3)
+
+    else:
+        B_aa = np.zeros_like(A_aa)
+
     print('[DEBUG] A_aa raw shape {}'.format(A_aa.shape))
-
-    B_aa  = v_iajb_aa.copy()
-    B_aa -= v_iajb_aa.swapaxes(1, 3)
-
     print('[DEBUG] B_aa raw shape {}'.format(B_aa.shape))
 
     A_aa.shape = (nov_a, nov_a)
@@ -76,13 +81,17 @@ def tduhf_eigen(occ, eps, v_eri, nov, coupled='True'):
     print("")
     A_bb  = np.einsum('ab,ij->iajb', np.diag(eps_v_b), np.diag(np.ones(nocc_b)))
     A_bb -= np.einsum('ij,ab->iajb', np.diag(eps_o_b), np.diag(np.ones(nvir_b)))
-    A_bb += v_iajb_bb
-    A_bb -= v_ijab_bb.swapaxes(1, 2)
+
+    if coupled:
+        A_bb += v_iajb_bb
+        A_bb -= v_ijab_bb.swapaxes(1, 2)
+
+        B_bb  = v_iajb_bb.copy()
+        B_bb -= v_iajb_bb.swapaxes(1, 3)
+    else:
+        B_bb = np.zeros_like(A_bb)
+
     print('[DEBUG] A_bb raw shape {}'.format(A_bb.shape))
-
-    B_bb  = v_iajb_bb.copy()
-    B_bb -= v_iajb_bb.swapaxes(1, 3)
-
     print('[DEBUG] B_bb raw shape {}'.format(B_bb.shape))
 
     # Reshape and jam it together
@@ -96,10 +105,15 @@ def tduhf_eigen(occ, eps, v_eri, nov, coupled='True'):
     # alpha & beta #
     ################
     print("")
-    A_ab = v_iajb_ab.copy()
-    print('[DEBUG] A_ab raw shape {}'.format(A_ab.shape))
+    if coupled:
+        A_ab = v_iajb_ab.copy()
 
-    B_ab  = v_iajb_ab.copy()
+        B_ab  = v_iajb_ab.copy()
+    else:
+        A_ab = np.zeros((nov_a, nov_b))
+        B_ab = np.zeros_like(A_ab)
+
+    print('[DEBUG] A_ab raw shape {}'.format(A_ab.shape))
     print('[DEBUG] B_ab raw shape {}'.format(B_ab.shape))
 
     A_ab.shape = (nov_a, nov_b)
@@ -110,10 +124,15 @@ def tduhf_eigen(occ, eps, v_eri, nov, coupled='True'):
     # beta & alpha #
     ################
     print("")
-    A_ba = v_iajb_ba.copy()
-    print('[DEBUG] A_ba raw shape {}'.format(A_ba.shape))
 
-    B_ba  = v_iajb_ab.copy()
+    if coupled:
+        A_ba = v_iajb_ba.copy()
+
+        B_ba  = v_iajb_ab.copy()
+    else:
+        A_ba = np.zeros((nov_a, nov_b))
+        B_ba = np.zeros_like(A_ab)
+    print('[DEBUG] A_ba raw shape {}'.format(A_ba.shape))
     print('[DEBUG] B_ba raw shape {}'.format(B_ba.shape))
 
     A_ba.shape = (nov_b, nov_a)
@@ -197,6 +216,7 @@ def tduhf_eigen(occ, eps, v_eri, nov, coupled='True'):
         if abs(eig[v].imag) > 1e-13:
             print("[Warning] Large imaginary part! Im(omega) = {:3e}".format(eig[v].imag))
 
+        #print("Omega[{0}] = {1:5e}".format(v, w))
     print('Generalized eingenvalue took:  %5.3f seconds\n' % ( time.time() - t))
 
     # fixing Z normalization in hermitian eigenproblem
